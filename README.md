@@ -35,7 +35,7 @@
 ## 环境要求
 
 - Python 3.8 ~ 3.10
-- TensorFlow 2.x
+- TensorFlow 2.13
 - OpenCV
 - Flask
 
