@@ -1,107 +1,161 @@
-# License-Plate-Recognition 本地运行指南（PyCharm / VS Code）
+# 中文车牌识别系统
 
-这个项目是一个中文车牌识别 Demo，默认使用仓库里已经提供的 `unet.h5` 与 `cnn.h5` 做推理。
+基于深度学习的中文车牌识别系统，支持 Web 端和桌面端两种使用方式。
 
-## 1. 环境要求
+## 系统架构
 
-- Python 3.8 ~ 3.10（推荐 3.9）
-- Windows / macOS / Linux
-- 需要图形界面（Tkinter）
+```
+┌─────────────────────────────────────────────────────────┐
+│                      输入图片                            │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  UNet 车牌定位模型 (unet.h5)                             │
+│  → 定位并分割车牌区域                                    │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  CRNN+CTC 端到端识别模型 (final_model_90.h5)            │
+│  → 识别车牌字符，输出 7 位车牌号                         │
+└─────────────────────────────────────────────────────────┘
+```
 
-> 说明：项目使用 TensorFlow + OpenCV + Pillow。首次安装依赖会比较慢。
+## 版本对比
 
-## 2. 创建虚拟环境并安装依赖
-通过该指令可以安装所有依赖：
+| 特性 | Web 版 | 桌面版 |
+|------|--------|--------|
+| 入口 | `app.py` | `UI.py` |
+| 识别模型 | CRNN+CTC (97.5%) | CNN (7 字符独立输出) |
+| 界面 | 浏览器 Web 界面 | Tkinter 桌面应用 |
+| 部署方式 | Flask 服务 | 本地运行 |
+| 历史记录 | localStorage | 无 |
+
+## 环境要求
+
+- Python 3.8 ~ 3.10
+- TensorFlow 2.x
+- OpenCV
+- Flask
+
+## 安装依赖
+
 ```bash
 pip install -r requirements.txt
 ```
 
+## 模型下载
 
+> ⚠️ 由于模型文件较大（~22MB），请自行下载并放置到 `Chinese_plate/` 目录
 
-在项目根目录执行：
+**模型文件**：`final_model_90.h5`（约 22MB）
+
+**下载链接**：
+- 夸克网盘：https://pan.quark.cn/s/d12b9fc6703c
+
+放置路径：
+```
+Chinese_plate/
+├── final_model_90.h5   # ← 放在这里
+├── unet.h5
+├── cnn.h5
+├── app.py
+└── index.html
+```
+
+## 快速开始
+
+### Web 版（推荐）
 
 ```bash
-python -m venv .venv
+cd Chinese_plate
+python app.py
 ```
 
-### Windows
+启动后访问：http://localhost:5000
+
+功能：
+- 上传图片识别（支持 JPG/PNG）
+- 输入图片 URL 识别
+- 显示识别结果和置信度
+- 历史记录自动保存在浏览器
+
+### 桌面版
 
 ```bash
-.venv\Scripts\activate
-python -m pip install --upgrade pip
-pip install tensorflow opencv-python pillow numpy
+cd Chinese_plate
+python UI.py
 ```
 
-### macOS / Linux
+## 项目文件说明
+
+```
+Chinese_plate/
+├── app.py              # Flask Web 入口 ← Web 版启动文件
+├── index.html          # Web 前端页面
+├── UI.py               # Tkinter 桌面入口 ← 桌面版启动文件
+├── core.py             # 车牌定位后处理
+├── Unet.py             # UNet 定位模型
+├── CNN.py              # CNN 识别模型（旧版）
+├── final_model_90.h5   # CRNN+CTC 识别模型（97.5% 准确率）
+├── unet.h5             # UNet 定位权重
+├── cnn.h5              # CNN 识别权重（旧版）
+├── crnn_dataset.py     # CCPD 数据预处理
+├── crnn_train.py       # CRNN 训练脚本
+├── crnn_eval.py        # 模型评估脚本
+└── crnn_test_scenarios.py  # 多场景测试
+```
+
+## 训练自己的模型（可选）
+
+### 1. 数据预处理
 
 ```bash
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install tensorflow opencv-python pillow numpy
+python crnn_dataset.py --ccpd_root /path/to/CCPD --output_dir crnn_data
 ```
 
-## 3. 运行方式
-
-请从项目根目录启动：
+### 2. 训练 CRNN+CTC
 
 ```bash
-python Chinese_plate/UI.py
+python crnn_train.py --data_dir crnn_data --epochs 30 --batch_size 64
 ```
 
-启动后点击：
-1. **选择文件**（选一张图片）
-2. **识别车牌**
-
-## 4. PyCharm 运行配置
-
-1. 打开项目根目录 `License-Plate-Recognition`
-2. `Settings -> Project -> Python Interpreter`，选择 `.venv`
-3. 新建 Run Configuration：
-   - Script path: `Chinese_plate/UI.py`
-   - Working directory: 项目根目录（非常重要）
-4. Run
-
-## 5. VS Code 运行配置
-
-1. 用 VS Code 打开项目根目录
-2. `Python: Select Interpreter` 选择 `.venv`
-3. 在终端执行：
+### 3. 评估模型
 
 ```bash
-python Chinese_plate/UI.py
+python crnn_eval.py --model crnn.h5 --data_dir crnn_data --split val
 ```
 
-如果你想用 F5 启动，可创建 `.vscode/launch.json`：
+### 4. 多场景测试
 
-```json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Run UI",
-      "type": "python",
-      "request": "launch",
-      "program": "${workspaceFolder}/Chinese_plate/UI.py",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal"
-    }
-  ]
-}
+```bash
+python crnn_test_scenarios.py --model crnn.h5 --data_dir crnn_data --n 500 --plot
 ```
 
-## 6. 常见问题
+## 技术细节
 
-### Q1: `No module named tensorflow`
-- 说明依赖未安装到当前解释器。
-- 重新确认 IDE 选择的是 `.venv`，然后安装依赖。
+- **定位**：UNet 语义分割 → 轮廓检测 → 透视变换矫正
+- **识别**：CRNN (CNN + BiLSTM) + CTC Loss
+- **字符集**：65 类（31 省份缩写 + 24 字母 + 10 数字）
+- **输入尺寸**：32×128 灰度图
+- **准确率**：97.5%（验证集）
 
-### Q2: `can't open/read file` 或找不到 `unet.h5` / `cnn.h5`
-- 需要从项目根目录运行，或者使用本仓库中已经修正的 UI（会按脚本目录加载模型文件）。
+## 常见问题
 
-### Q3: 选择中文路径图片失败
-- 项目已使用 `cv2.imdecode(np.fromfile(...))`，通常可处理中文路径。
+### Q1: 启动失败提示找不到模型
+- 确认 `final_model_90.h5` 已放置在 `Chinese_plate/` 目录
+- 确认从项目根目录启动
 
-## 7. 训练说明（可选）
+### Q2: 识别结果为空
+- 检查图片是否包含车牌
+- 尝试更清晰的图片
+- 确认模型文件完整（22MB 左右）
 
-仓库可以训练，但 `Unet.py`、`CNN.py` 内的数据集路径是示例硬编码路径，需要你先改成自己的数据路径。
+### Q3: Web 界面无法访问
+- 确认端口 5000 未被占用
+- 尝试更换端口：`python app.py --port 8080`
 
+## License
+
+MIT License
