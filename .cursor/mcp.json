@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "apifox-new-mcp": {
+      "url": "https://apifox.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer afxp_5dee1aBrALjp351lGO0Xg73C3xRyqsIfOso7",
+        "X-Apifox-Api-Version": "2025-09-01"
+      }
+    }
+  }
+}

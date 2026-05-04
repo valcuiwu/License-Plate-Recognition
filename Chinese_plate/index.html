@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>车牌识别系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* 拖拽高亮 */
+    #drop-zone.drag-over {
+      border-color: #6366f1;
+      background-color: #eef2ff;
+    }
+    /* 置信度进度条动画 */
+    .bar-fill { transition: width 0.6s ease; }
+    /* 历史记录卡片悬停 */
+    .history-card:hover { transform: translateY(-2px); }
+    /* 淡入动画 */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.35s ease both; }
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-800">
+
+<!-- ── 顶部导航 ─────────────────────────────────────────────────────────── -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+  <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <rect x="2" y="7" width="20" height="10" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+        <circle cx="7" cy="17" r="1.5" fill="currentColor"/>
+        <circle cx="17" cy="17" r="1.5" fill="currentColor"/>
+        <path d="M5 10h14" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      <span class="font-semibold text-slate-900 text-lg tracking-tight">车牌识别</span>
+    </div>
+    <nav class="flex gap-1">
+      <button onclick="showTab('recognize')"
+        id="tab-recognize"
+        class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium transition-colors bg-indigo-600 text-white">
+        识别
+      </button>
+      <button onclick="showTab('history')"
+        id="tab-history"
+        class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium transition-colors text-slate-500 hover:text-slate-800">
+        历史记录
+        <span id="history-badge" class="ml-1 bg-slate-200 text-slate-600 text-xs px-1.5 py-0.5 rounded-full">0</span>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<!-- ── 主内容 ─────────────────────────────────────────────────────────────── -->
+<main class="max-w-5xl mx-auto px-6 py-8">
+
+  <!-- ══ 识别面板 ══ -->
+  <section id="panel-recognize" class="space-y-6">
+
+    <!-- 输入卡片 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-semibold text-slate-700 mb-4">上传图片 / 输入 URL</h2>
+
+      <!-- 拖拽上传区 -->
+      <div id="drop-zone"
+        class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer transition-colors hover:border-indigo-400 hover:bg-indigo-50/40"
+        onclick="document.getElementById('file-input').click()"
+        ondragover="handleDragOver(event)"
+        ondragleave="handleDragLeave(event)"
+        ondrop="handleDrop(event)">
+        <input id="file-input" type="file" accept=".jpg,.jpeg,.png" class="hidden" onchange="handleFileSelect(event)" />
+        <div id="drop-hint">
+          <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+          </svg>
+          <p class="text-slate-500 text-sm">拖拽图片到此处，或 <span class="text-indigo-600 font-medium">点击选择文件</span></p>
+          <p class="text-slate-400 text-xs mt-1">支持 JPG、PNG，最大 16 MB</p>
+        </div>
+        <!-- 预览 -->
+        <div id="preview-wrap" class="hidden">
+          <img id="preview-img" class="max-h-56 mx-auto rounded-lg object-contain shadow" />
+          <p id="preview-name" class="text-xs text-slate-400 mt-2"></p>
+        </div>
+      </div>
+
+      <!-- URL 输入 -->
+      <div class="mt-4 flex gap-2 items-center">
+        <span class="text-slate-400 text-sm shrink-0">或输入图片 URL</span>
+        <input id="url-input" type="url" placeholder="https://example.com/plate.jpg"
+          class="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
+          oninput="handleUrlInput()" />
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="mt-5 flex gap-3">
+        <button id="btn-recognize" onclick="doRecognize()"
+          class="flex-1 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-medium py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"/>
+          </svg>
+          识别车牌
+        </button>
+        <button onclick="clearAll()"
+          class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 active:scale-95 transition-all text-sm font-medium">
+          清空
+        </button>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div id="loading" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-8 text-center">
+      <div class="inline-flex items-center gap-3 text-indigo-600">
+        <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <span class="text-sm font-medium">正在识别中，请稍候…</span>
+      </div>
+    </div>
+
+    <!-- 错误提示 -->
+    <div id="error-box" class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3 fade-in">
+      <svg class="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 8v4m0 4h.01"/>
+      </svg>
+      <p id="error-msg" class="text-sm text-red-700"></p>
+    </div>
+
+    <!-- 结果区 -->
+    <div id="result-section" class="hidden space-y-5 fade-in">
+
+      <!-- 标注原图 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+        <h3 class="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+          </svg>
+          标注原图
+        </h3>
+        <img id="result-annotated" class="w-full max-h-80 object-contain rounded-lg bg-slate-50" />
+      </div>
+
+      <!-- 识别结果列表 -->
+      <div id="plates-container" class="space-y-4"></div>
+
+    </div>
+  </section>
+
+  <!-- ══ 历史记录面板 ══ -->
+  <section id="panel-history" class="hidden">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-base font-semibold text-slate-700">识别历史</h2>
+      <button onclick="clearHistory()"
+        class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors">
+        清空历史
+      </button>
+    </div>
+    <div id="history-list" class="space-y-3"></div>
+    <div id="history-empty" class="hidden text-center py-16 text-slate-400">
+      <svg class="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z"/>
+      </svg>
+      <p class="text-sm">暂无历史记录</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── 脚本 ──────────────────────────────────────────────────────────────── -->
+<script>
+// ── 状态 ──────────────────────────────────────────────────────────────────
+let selectedFile = null;   // File 对象
+let selectedUrl  = '';     // URL 字符串
+
+// ── Tab 切换 ──────────────────────────────────────────────────────────────
+function showTab(name) {
+  ['recognize', 'history'].forEach(t => {
+    document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
+    const btn = document.getElementById('tab-' + t);
+    if (t === name) {
+      btn.classList.add('bg-indigo-600', 'text-white');
+      btn.classList.remove('text-slate-500', 'hover:text-slate-800');
+    } else {
+      btn.classList.remove('bg-indigo-600', 'text-white');
+      btn.classList.add('text-slate-500', 'hover:text-slate-800');
+    }
+  });
+  if (name === 'history') renderHistory();
+}
+
+// ── 文件处理 ──────────────────────────────────────────────────────────────
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) setFile(file);
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+
+function handleDragLeave() {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(file);
+}
+
+function setFile(file) {
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    showError('仅支持 JPG / PNG 格式');
+    return;
+  }
+  selectedFile = file;
+  selectedUrl  = '';
+  document.getElementById('url-input').value = '';
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('preview-img').src = ev.target.result;
+    document.getElementById('preview-name').textContent = file.name + '  (' + (file.size / 1024).toFixed(1) + ' KB)';
+    document.getElementById('drop-hint').classList.add('hidden');
+    document.getElementById('preview-wrap').classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+  hideError();
+  hideResult();
+}
+
+function handleUrlInput() {
+  const val = document.getElementById('url-input').value.trim();
+  if (val) {
+    selectedUrl  = val;
+    selectedFile = null;
+    document.getElementById('drop-hint').classList.remove('hidden');
+    document.getElementById('preview-wrap').classList.add('hidden');
+    hideError();
+    hideResult();
+  }
+}
+
+// ── 识别 ──────────────────────────────────────────────────────────────────
+async function doRecognize() {
+  if (!selectedFile && !selectedUrl) {
+    showError('请先上传图片或输入图片 URL');
+    return;
+  }
+
+  hideError();
+  hideResult();
+  setLoading(true);
+
+  try {
+    let res;
+    if (selectedFile) {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      res = await fetch('/api/recognize', { method: 'POST', body: fd });
+    } else {
+      res = await fetch('/api/recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: selectedUrl }),
+      });
+    }
+
+    const data = await res.json();
+    if (!data.success) {
+      showError(data.error || '识别失败');
+    } else {
+      renderResult(data);
+      saveHistory(data);
+    }
+  } catch (err) {
+    showError('请求失败：' + err.message);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ── 渲染结果 ──────────────────────────────────────────────────────────────
+function renderResult(data) {
+  document.getElementById('result-annotated').src = data.annotated_image;
+
+  const container = document.getElementById('plates-container');
+  container.innerHTML = '';
+
+  data.plates.forEach((p, i) => {
+    const pct = Math.round(p.confidence * 100);
+    const barColor = pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-400';
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200 p-5 fade-in';
+    card.innerHTML = `
+      <div class="flex items-center gap-2 mb-4">
+        <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">${i + 1}</span>
+        <span class="text-sm font-semibold text-slate-600">车牌 ${i + 1}</span>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-5 items-start">
+        <img src="${p.plate_image}" class="h-16 rounded-lg border border-slate-200 object-contain bg-slate-50 shrink-0" />
+        <div class="flex-1 min-w-0">
+          <p class="text-3xl font-bold tracking-widest text-slate-900 mb-3">${p.plate_number}</p>
+          <div class="flex items-center gap-3">
+            <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div class="bar-fill h-2 rounded-full ${barColor}" style="width:${pct}%"></div>
+            </div>
+            <span class="text-sm font-semibold ${pct >= 80 ? 'text-emerald-600' : pct >= 60 ? 'text-amber-500' : 'text-red-500'} shrink-0">
+              ${pct}%
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">置信度</p>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+
+  document.getElementById('result-section').classList.remove('hidden');
+}
+
+// ── 历史记录 ──────────────────────────────────────────────────────────────
+const HISTORY_KEY = 'lpr_history';
+
+function saveHistory(data) {
+  const history = getHistory();
+  const entry = {
+    id:        Date.now(),
+    time:      new Date().toLocaleString('zh-CN'),
+    annotated: data.annotated_image,
+    plates:    data.plates,
+  };
+  history.unshift(entry);
+  if (history.length > 50) history.pop();   // 最多保留 50 条
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  updateBadge();
+}
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+  catch { return []; }
+}
+
+function clearHistory() {
+  if (!confirm('确定清空所有历史记录？')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  updateBadge();
+  renderHistory();
+}
+
+function updateBadge() {
+  const n = getHistory().length;
+  document.getElementById('history-badge').textContent = n;
+}
+
+function renderHistory() {
+  const history = getHistory();
+  const list  = document.getElementById('history-list');
+  const empty = document.getElementById('history-empty');
+  list.innerHTML = '';
+
+  if (!history.length) {
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  history.forEach(entry => {
+    const platesSummary = entry.plates.map(p => p.plate_number).join('  /  ');
+    const card = document.createElement('div');
+    card.className = 'history-card bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex gap-4 items-start transition-transform cursor-pointer hover:shadow-md';
+    card.innerHTML = `
+      <img src="${entry.annotated}" class="w-28 h-20 object-contain rounded-lg border border-slate-100 bg-slate-50 shrink-0" />
+      <div class="flex-1 min-w-0">
+        <p class="text-xs text-slate-400 mb-1">${entry.time}</p>
+        <p class="text-lg font-bold tracking-widest text-slate-900 truncate">${platesSummary || '—'}</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          ${entry.plates.map(p => {
+            const pct = Math.round(p.confidence * 100);
+            const color = pct >= 80 ? 'bg-emerald-100 text-emerald-700' : pct >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600';
+            return `<span class="text-xs px-2 py-0.5 rounded-full font-medium ${color}">${p.plate_number} · ${pct}%</span>`;
+          }).join('')}
+        </div>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+// ── UI 辅助 ───────────────────────────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById('loading').classList.toggle('hidden', !on);
+  document.getElementById('btn-recognize').disabled = on;
+}
+
+function showError(msg) {
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('error-box').classList.remove('hidden');
+}
+
+function hideError() {
+  document.getElementById('error-box').classList.add('hidden');
+}
+
+function hideResult() {
+  document.getElementById('result-section').classList.add('hidden');
+}
+
+function clearAll() {
+  selectedFile = null;
+  selectedUrl  = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('url-input').value  = '';
+  document.getElementById('drop-hint').classList.remove('hidden');
+  document.getElementById('preview-wrap').classList.add('hidden');
+  hideError();
+  hideResult();
+}
+
+// ── 初始化 ────────────────────────────────────────────────────────────────
+updateBadge();
+</script>
+</body>
+</html>
